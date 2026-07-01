@@ -1,0 +1,14 @@
+{
+  "name": "electric-usage",
+  "version": "1.0.0",
+  "description": "Download PG&E energy usage data via browser automation",
+  "main": "download.js",
+  "scripts": {
+    "download": "node download.js"
+  },
+  "dependencies": {
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "playwright": "^1.49.0"
+  }
+}

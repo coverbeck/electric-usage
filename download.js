@@ -40,6 +40,7 @@ function isoToMMDDYYYY(dateStr) {
 }
 
 function parseCost(str) {
+  if (str === undefined || str === '') return 0;
   return parseFloat(str.trim().replace(/\$/g, ''));
 }
 
@@ -49,21 +50,32 @@ function findHeaderIndex(lines, prefix) {
   return idx;
 }
 
+// PG&E sometimes omits the COST column entirely for very recent/unfinalized
+// days, so columns are located by header name rather than fixed position.
 function parseElectricCsv(content) {
   const lines = content.split(/\r?\n/);
   const headerIdx = findHeaderIndex(lines, 'TYPE,DATE,START TIME');
+  const header = lines[headerIdx].split(',');
+  const col = (name) => header.indexOf(name);
+  const dateIdx = col('DATE');
+  const startIdx = col('START TIME');
+  const endIdx = col('END TIME');
+  const importIdx = col('IMPORT (kWh)');
+  const exportIdx = col('EXPORT (kWh)');
+  const costIdx = col('COST');
+
   const readings = [];
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const [, date, startTime, endTime, importKwh, exportKwh, cost] = line.split(',');
+    const fields = line.split(',');
     readings.push({
-      usageDate: date,
-      startTime,
-      endTime,
-      importKwh: parseFloat(importKwh),
-      exportKwh: parseFloat(exportKwh),
-      cost: parseCost(cost),
+      usageDate: fields[dateIdx],
+      startTime: fields[startIdx],
+      endTime: fields[endIdx],
+      importKwh: parseFloat(fields[importIdx]),
+      exportKwh: parseFloat(fields[exportIdx]),
+      cost: costIdx === -1 ? 0 : parseCost(fields[costIdx]),
     });
   }
   return readings;
@@ -72,15 +84,21 @@ function parseElectricCsv(content) {
 function parseGasCsv(content) {
   const lines = content.split(/\r?\n/);
   const headerIdx = findHeaderIndex(lines, 'TYPE,DATE,START TIME');
+  const header = lines[headerIdx].split(',');
+  const col = (name) => header.indexOf(name);
+  const dateIdx = col('DATE');
+  const thermsIdx = col('USAGE (therms)');
+  const costIdx = col('COST');
+
   const readings = [];
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const line = lines[i].trim();
     if (!line) continue;
-    const [, date, , , therms, cost] = line.split(',');
+    const fields = line.split(',');
     readings.push({
-      usageDate: date,
-      therms: parseFloat(therms),
-      cost: parseCost(cost),
+      usageDate: fields[dateIdx],
+      therms: parseFloat(fields[thermsIdx]),
+      cost: costIdx === -1 ? 0 : parseCost(fields[costIdx]),
     });
   }
   return readings;

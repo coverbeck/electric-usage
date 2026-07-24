@@ -3,6 +3,14 @@ const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
 
+function timestamp() {
+  return new Date().toLocaleString('sv-SE', { timeZone: 'America/Los_Angeles' });
+}
+const origLog = console.log;
+const origError = console.error;
+console.log = (...args) => origLog(`[${timestamp()}]`, ...args);
+console.error = (...args) => origError(`[${timestamp()}]`, ...args);
+
 const USERNAME = process.env.PGE_USERNAME;
 const PASSWORD = process.env.PGE_PASSWORD;
 const API_BASE_URL = process.env.API_BASE_URL;
@@ -130,6 +138,21 @@ async function postReadings(electric, gas) {
     throw new Error(`POST /api/electric-usage failed: ${res.status} ${JSON.stringify(json)}`);
   }
   return json;
+}
+
+async function postCheckin(status, message) {
+  const auth = Buffer.from(`${API_AUTH_USER}:${API_AUTH_PASS}`).toString('base64');
+  const res = await fetch(`${API_BASE_URL}/api/job-checkins`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Basic ${auth}`,
+    },
+    body: JSON.stringify({ jobName: 'electric-usage', status, message }),
+  });
+  if (!res.ok) {
+    throw new Error(`POST /api/job-checkins failed: ${res.status} ${await res.text()}`);
+  }
 }
 
 async function login(page) {
@@ -273,8 +296,9 @@ async function run() {
   const toIso = todayPacific();
 
   if (fromIso > toIso) {
-    console.log(`Nothing new to fetch (next needed date ${fromIso} is after today ${toIso}).`);
-    return;
+    const message = `Nothing new to fetch (next needed date ${fromIso} is after today ${toIso}).`;
+    console.log(message);
+    return message;
   }
 
   console.log(`Fetching PG&E usage from ${fromIso} to ${toIso}...`);
@@ -293,9 +317,20 @@ async function run() {
 
   fs.unlinkSync(zipPath);
   console.log('Done.');
+  return `Parsed ${electric.length} electric rows, ${gas.length} gas rows.`;
 }
 
-run().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+run()
+  .then(async (message) => {
+    await postCheckin('ok', message).catch((err) => {
+      console.error('Failed to post checkin:', err);
+    });
+  })
+  .catch(async (err) => {
+    console.error(err);
+    const message = err instanceof Error ? err.message : String(err);
+    await postCheckin('error', message).catch((checkinErr) => {
+      console.error('Failed to post checkin:', checkinErr);
+    });
+    process.exit(1);
+  });

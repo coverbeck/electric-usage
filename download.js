@@ -58,9 +58,16 @@ function findHeaderIndex(lines, prefix) {
   return idx;
 }
 
+// PG&E returns this placeholder instead of a header+rows CSV when the requested
+// service's usage data isn't finalized yet (observed for gas, which lags electric).
+function isNoDataAvailable(content) {
+  return /no available usage data/i.test(content);
+}
+
 // PG&E sometimes omits the COST column entirely for very recent/unfinalized
 // days, so columns are located by header name rather than fixed position.
 function parseElectricCsv(content) {
+  if (isNoDataAvailable(content)) return [];
   const lines = content.split(/\r?\n/);
   const headerIdx = findHeaderIndex(lines, 'TYPE,DATE,START TIME');
   const header = lines[headerIdx].split(',');
@@ -90,6 +97,7 @@ function parseElectricCsv(content) {
 }
 
 function parseGasCsv(content) {
+  if (isNoDataAvailable(content)) return [];
   const lines = content.split(/\r?\n/);
   const headerIdx = findHeaderIndex(lines, 'TYPE,DATE,START TIME');
   const header = lines[headerIdx].split(',');

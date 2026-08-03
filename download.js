@@ -267,6 +267,19 @@ async function downloadExport(fromIso, toIso) {
   }
 }
 
+async function withRetries(fn, attempts, backoffMs) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === attempts - 1) throw err;
+      const delay = backoffMs[Math.min(i, backoffMs.length - 1)];
+      console.log(`Attempt ${i + 1}/${attempts} failed: ${err.message}. Retrying in ${delay / 1000}s...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 function extractAndParse(zipPath) {
   fs.rmSync(EXTRACT_DIR, { recursive: true, force: true });
   fs.mkdirSync(EXTRACT_DIR, { recursive: true });
@@ -310,7 +323,7 @@ async function run() {
   }
 
   console.log(`Fetching PG&E usage from ${fromIso} to ${toIso}...`);
-  const zipPath = await downloadExport(fromIso, toIso);
+  const zipPath = await withRetries(() => downloadExport(fromIso, toIso), 3, [10000, 30000]);
 
   const { electric, gas } = extractAndParse(zipPath);
   console.log(`Parsed ${electric.length} electric rows, ${gas.length} gas rows.`);

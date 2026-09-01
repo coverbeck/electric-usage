@@ -32,16 +32,19 @@ const TOKENS_FILE = path.join(__dirname, 'enphase-tokens.json');
 // today (always refreshed) + oldest-edge backfill (outrunning Enphase's rolling 2-year
 // window) + recent-history backfill (walking backward from yesterday). Once the 2-year
 // window is fully backfilled, groups 2 and 3 naturally find nothing to do and each run
-// reduces to just the "today" call. Kept proportional to the original 1/2/7 split.
+// reduces to just the "today" call. Kept proportional to the original 1/2/7 split
+// (bumped 2026-09-01 from 15/2min to 30/4min for faster backfill progress — still
+// 7.5 calls/min, under Enphase's 10/min cap, and ~900 calls/month at daily cadence,
+// under the 1,000/month cap).
 const TODAY_CALLS = 1;
-const OLDEST_EDGE_CALLS = 3;
-const RECENT_BACKWARD_CALLS = 11;
+const OLDEST_EDGE_CALLS = 6;
+const RECENT_BACKWARD_CALLS = 23;
 const TOTAL_CALLS = TODAY_CALLS + OLDEST_EDGE_CALLS + RECENT_BACKWARD_CALLS;
 
 // Spread all calls evenly across this window so a burst never approaches Enphase's
 // free-tier 10-requests/minute cap — 15 calls in one tight burst is exactly what
 // tripped a rate-limit violation on 2026-08-31.
-const SPREAD_WINDOW_MS = 2 * 60 * 1000;
+const SPREAD_WINDOW_MS = 4 * 60 * 1000;
 const CALL_DELAY_MS = Math.floor(SPREAD_WINDOW_MS / (TOTAL_CALLS - 1));
 
 function sleep(ms) {

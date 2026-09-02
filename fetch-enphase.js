@@ -33,12 +33,13 @@ const TOKENS_FILE = path.join(__dirname, 'enphase-tokens.json');
 // window) + recent-history backfill (walking backward from yesterday). Once the 2-year
 // window is fully backfilled, groups 2 and 3 naturally find nothing to do and each run
 // reduces to just the "today" call. Kept proportional to the original 1/2/7 split
-// (bumped 2026-09-01 from 15/2min to 30/4min for faster backfill progress — still
-// 7.5 calls/min, under Enphase's 10/min cap, and ~900 calls/month at daily cadence,
-// under the 1,000/month cap).
+// (reduced 2026-09-01 from 30/4min to 27/4min — with manual runs stopped and only the
+// daily launchd job left, 27/day * 30 days/month ~= 810, landing close to a target of
+// ~800 calls for the rest of this month on top of the ~200 already made, staying safely
+// under Enphase's 1,000/month cap).
 const TODAY_CALLS = 1;
-const OLDEST_EDGE_CALLS = 6;
-const RECENT_BACKWARD_CALLS = 23;
+const OLDEST_EDGE_CALLS = 5;
+const RECENT_BACKWARD_CALLS = 21;
 const TOTAL_CALLS = TODAY_CALLS + OLDEST_EDGE_CALLS + RECENT_BACKWARD_CALLS;
 
 // Spread all calls evenly across this window so a burst never approaches Enphase's

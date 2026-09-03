@@ -127,6 +127,13 @@ async function ensureFreshToken() {
   return data.access_token;
 }
 
+// A full day of 5-minute solar intervals is 288; a legitimate DST spring-forward day is
+// 276 (23 hours). Anything below this is treated as an incomplete fetch (typically a date
+// that was only ever captured while it was still "today") and stays eligible for
+// oldest-edge/recent-backward to fill in, rather than being skipped forever just because
+// *some* rows exist for it.
+const COMPLETE_INTERVALS_THRESHOLD = 250;
+
 async function fetchExistingDates() {
   const auth = Buffer.from(`${API_AUTH_USER}:${API_AUTH_PASS}`).toString('base64');
   const res = await fetch(`${API_BASE_URL}/api/solar-generation/dates`, {
@@ -136,10 +143,15 @@ async function fetchExistingDates() {
     throw new Error(`Failed to fetch existing dates: ${res.status} ${await res.text()}`);
   }
   const data = await res.json();
-  return new Set(data.dates);
+  const complete = new Set(
+    Object.entries(data.counts ?? {})
+      .filter(([, count]) => count >= COMPLETE_INTERVALS_THRESHOLD)
+      .map(([date]) => date)
+  );
+  return complete;
 }
 
-function planTargetDates(existingDates) {
+function planTargetDates(completeDates) {
   const today = todayPacific();
   const claimed = new Set();
   const targets = [];
@@ -150,7 +162,7 @@ function planTargetDates(existingDates) {
   let cursor = addDaysIso(today, -TWO_YEAR_WINDOW_DAYS);
   let found = 0;
   while (found < OLDEST_EDGE_CALLS && cursor < today) {
-    if (!existingDates.has(cursor) && !claimed.has(cursor)) {
+    if (!completeDates.has(cursor) && !claimed.has(cursor)) {
       targets.push({ date: cursor, group: 'oldest-edge' });
       claimed.add(cursor);
       found++;
@@ -162,7 +174,7 @@ function planTargetDates(existingDates) {
   found = 0;
   const backwardStop = addDaysIso(today, -BACKWARD_WALK_SAFETY_DAYS);
   while (found < RECENT_BACKWARD_CALLS && cursor > backwardStop) {
-    if (!existingDates.has(cursor) && !claimed.has(cursor)) {
+    if (!completeDates.has(cursor) && !claimed.has(cursor)) {
       targets.push({ date: cursor, group: 'recent-backward' });
       claimed.add(cursor);
       found++;
@@ -241,10 +253,10 @@ async function run() {
   const accessToken = await ensureFreshToken();
 
   console.log('Fetching existing stored dates...');
-  const existingDates = await fetchExistingDates();
-  console.log(`${existingDates.size} day(s) already stored.`);
+  const completeDates = await fetchExistingDates();
+  console.log(`${completeDates.size} day(s) already complete.`);
 
-  const targets = planTargetDates(existingDates);
+  const targets = planTargetDates(completeDates);
   console.log(`Plan (${targets.length} call(s)): ${targets.map((t) => `${t.date} [${t.group}]`).join(', ')}`);
 
   const totals = { received: 0, inserted: 0, duplicates: 0 };
